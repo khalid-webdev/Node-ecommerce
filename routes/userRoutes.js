@@ -1,9 +1,9 @@
-
 const express = require("express");
 const router = express.Router();
 const Joi = require('joi');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
+const authMiddleware = require("../middleware/authMiddleware");
 const User = require("../models/userModel");
 
 const joiSchema = Joi.object({
@@ -36,9 +36,33 @@ router.post("/", async (req, res) => {
   });
   await newUser.save();
   const token = generateToken({ _id: newUser._id, username: newUser.username, role: newUser.role });
-  console.log('newUser', newUser)
   res.status(201).json(token);
 });
+//*user can login with email,password
+router.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+  /* ----------------------------- find the user ---------------------------- */
+  const user = await User.findOne({ email: email });
+  if (!user) {
+    return res.status(400).json({ message: "Invalid credentials!" });
+  }
+  /* ------------------------------ compare with password with given password ------------------------------ */
+  const comparedPass =await bcrypt.compare(password, user.password);
+  if (!comparedPass) {
+    return res.status(400).json({ message: "Invalid credentials!" });
+  }
+  /* ------------------------- generate new jwt token ------------------------- */
+  const token = generateToken({ _id: user._id, username: user.username, role: user.role });
+  res.status(200).json(token);
+})
+
+//*if user already registered some time ago they atomaticly logging in
+
+router.get("/",authMiddleware, async(req, res) => {
+  // const profile = req.user;
+  const user = await User.findById(req.user._id).select("-password");
+  res.json(user)
+})
 
 
 const generateToken = (object) => {
@@ -49,8 +73,6 @@ const generateToken = (object) => {
   );
 }
 
-//user can login with email,password
 
-//if user already registered some time ago they atomaticly logging in
 
 module.exports = router;
